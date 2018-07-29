@@ -1,0 +1,65 @@
+.game-guide {
+  margin-bottom: 16px;
+  font-size: 18px;
+  text-align: left;
+}
+
+.board-container {
+  position: relative;
+  width: 100%;
+  overflow: auto;
+}
+
+.square {
+  position: absolute;
+  top: 58px;
+  left: 58px;
+  width: 281px;
+  height: 281px;
+  border: 1px solid #fff;
+  transform: rotate(45deg);
+}
+
+// .line__1 {
+//   position: absolute;
+//   top: 58px;
+//   bottom: 0;
+//   border: 1px solid #fff;
+//   transform: rotate(45deg);
+// }
+
+.board__table {
+  position: relative;
+  width: 400px;
+  padding-bottom: 30px;
+  margin: 0 auto;
+  overflow: hidden;
+
+  &::after,
+  &::before {
+    position: absolute;
+    width: 560px;
+    content: "";
+    border-top: 1px solid #fff;
+    transform-origin: 0% 0%;
+  }
+
+  &::after {
+    left: 1px;
+    transform: rotate(45deg);
+  }
+
+  &::before {
+    left: 398px;
+    transform: rotate(135deg);
+  }
+}
+
+  .board__col {
+    float: left;
+    width: 100px;
+    height: 100px;
+    margin-right: -1px;
+    margin-bottom: -1px;
+    border: 1px solid #fff;
+  }
