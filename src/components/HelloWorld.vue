@@ -27,7 +27,7 @@
       <button @click="newGame" class="btn btn-danger btn-lg play">New Game</button>&nbsp;
     </div>
 
-    <p class="game-guide">Ships cannot occupy squares next to each other, horizontally, vertically or diagonally, you can place a ship by dragging the ship from the ship base.</p>
+    <p class="game-guide">Discs cannot occupy squares next to each other, horizontally, vertically or diagonally, you can place a disc by dragging the disc from the disc base.</p>
 
     <div id="board-container" :class="{
       'board-container': true,
@@ -35,13 +35,34 @@
     }">
       <div class="board__inner">
         <div class="board">
-          <div class="table board__table">
-            <div class="square"></div>
-            <div class="droppable board__col" v-for="(_, col) in colNo" :key="col" v-bind:class="{
-              'col': true
-            }" :title="`${col}`">
+          <div id="board-table" class="table board__table">
+            <div class="disc-container">
+              <template v-for="(disc) in discs">
+                <div :key="disc.name" :id="disc.name" v-draggable="disc.draggable" :class="{
+                  disc: true,
+                  [`disc-${disc.type}`]: true
+                }" :data-name="disc.name"></div>
+              </template>
             </div>
-            <div v-if="!this.enableReadyButton && !this.enableLazyButton" class="mask"></div>
+            <div class="dock-container">
+              <template v-for="(_, row) in (rowNo + 1)">
+                <template v-for="(_, col) in (colNo + 1)">
+                  <div v-bind:ref="`dock[${row}:${col}]`" :data-coord="`${row}:${col}`" :class="{
+                    dock: true,
+                    [`dock-${row}${col}`]: true
+                  }" :data-cell="`${row}:${col}`" :title="`${row}:${col}`" :key="`${row}${col}`">
+                    <div class="dock__drop droppable"></div>
+                  </div>
+                </template>
+              </template>
+            </div>
+            <div class="board__frame">
+              <div class="square"></div>
+              <div class="board__col" v-for="(_, col) in (colNo * rowNo)" :key="col" v-bind:class="{
+                'col': true
+              }" :title="`${col}`">
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -79,7 +100,7 @@
 /* eslint array-callback-return: 0 */
 
 import { setState, Draggable } from '../core/draggable';
-import { SHIPS, Game } from '../core/game';
+import Game from '../core/game';
 import WinnerModal from './WinnerModal';
 import LooseModal from './LooseModal';
 import UserConfigModal from './UserConfigModal';
@@ -92,7 +113,7 @@ import '../svg/pencil';
 import '../svg/heart';
 
 const socket = io(window.SOCKET_URL);
-const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'J', 'H', 'I', 'J'];
+const START_POINTS = ['2:0', '1:0', '0:0', '0:1', '0:2', '0:3', '0:4', '1:4', '2:4', '3:4', '4:4', '4:3', '4:2', '4:1', '4:0', '3:0'];
 
 export default {
   name: 'HelloWorld',
@@ -142,7 +163,7 @@ export default {
         winner,
         currentTurn,
         nextTurn,
-        ship
+        disc
       } = data;
 
       const isMyTurn = currentTurn === this.game.user;
@@ -152,7 +173,7 @@ export default {
         this.game.fire(cell, elem, {
           fireStatus,
           isDestroyed,
-          ship
+          disc
         });
 
         this.game.setTurn(nextTurn);
@@ -180,7 +201,7 @@ export default {
     });
 
     const rowNo = 4;
-    const colNo = 16;
+    const colNo = 4;
 
     this.game = new Game({
       rowNo,
@@ -188,52 +209,43 @@ export default {
     });
 
     this.game.setup({
-      isMyTurn: true
+      count: rowNo * colNo
     });
 
-    const ships = this.game.ships.map((ship) => {
-      ship.draggable = {
-        container: 'board-container',
+    const discs = this.game.discs.map((disc) => {
+      disc.draggable = {
+        container: 'board-table',
         onDragEnd: this.dragEnd,
         resetInitialPos: false,
         resetPreviousPos: false
       };
 
-      return ship;
+      return disc;
     });
 
     return {
       game: this.game,
-      letters: LETTERS,
       arrow: 'arrow',
       rowNo,
       colNo,
       cells: this.game.cells,
-      ships,
-      enableReadyButton: false,
-      enableLazyButton: true,
+      discs,
       isMyTurn: this.game.isMyTurn,
       oppPlayer: '(ᵔᴥᵔ)',
-      player: '(ᵔᴥᵔ)',
-      shipTypes: Object.keys(SHIPS)
+      player: '(ᵔᴥᵔ)'
     };
   },
 
   mounted() {
     this.checkUser();
-    this.game.hookShip();
-    this.game.ships.map(ship => this.resetPos(ship));
+    this.dock();
+    this.ready();
   },
 
   methods: {
     newGame(e, isEmitted) {
-      this.enableReadyButton = false;
-      this.enableLazyButton = true;
-
-      this.game.ships.map((ship) => {
-        this.resetPos(ship);
-        this.game.clearAllAnimeImages();
-        this.game.showShip(ship.name);
+      this.game.discs.map((disc) => {
+        this.resetPos(disc);
       });
 
       this.game.ready(false);
@@ -242,6 +254,38 @@ export default {
         socket.emit('newGame', {
           user: this.game.user
         });
+      }
+    },
+
+    ready() {
+      const { user, discs } = this.game;
+
+      socket.emit('ready', {
+        user,
+        discs
+      });
+    },
+
+    getDockCell(coord) {
+      if (typeof coord === 'string') {
+        coord = this.game.parseCoord(coord);
+      }
+
+      const arr = this.$refs[`dock[${this.game.createCoord(...coord)}]`];
+
+      return arr && arr[0];
+    },
+
+    dock() {
+      const count = this.rowNo * this.colNo;
+      const boardContainer = document.getElementById('board-table');
+      const containerRect = boardContainer.getBoundingClientRect();
+
+      for (let i = 0; i < START_POINTS.length; i++) {
+        const cellElem = this.getDockCell(START_POINTS[i]);
+        const discElem = document.getElementById(`disc-${i}`);
+
+        this.placeDisc(cellElem, discElem);
       }
     },
 
@@ -261,93 +305,46 @@ export default {
       this.player = this.game.user;
     },
 
-    getMapCell(coord) {
-      if (typeof coord === 'string') {
-        coord = this.game.parseCoord(coord);
-      }
-
-      const arr = this.$refs[`map[${this.game.createCoord(...coord)}]`];
-
-      return arr && arr[0];
-    },
-
-    getMapShip(name) {
-      return document.getElementById(name);
-    },
-
     dragEnd(elem, event) {
-      const shipName = event.dragElem.getAttribute('data-ship-name');
-      const ship = this.game.getShip(shipName);
-      const targetShipName = elem.getAttribute('data-ship-name');
-      const targetShip = this.game.getShip(targetShipName);
-
-      if (event.target.closest('.ship__rotate')) {
-        return;
-      }
+      const discName = event.dragElem.getAttribute('data-name');
+      const disc = this.game.getDisc(discName);
+      const targetDiscName = elem.getAttribute('data-name');
+      const targetDisc = this.game.getDisc(targetDiscName);
 
       if (elem && elem.closest('.droppable')) {
+        elem = elem.parentNode;
         const dragELemRect = event.getRectPosition();
         const cell = elem.getAttribute('data-cell');
         const coord = this.game.parseCoord(cell);
-        const dropElemWidth = elem.clientWidth;
-        const dropElemHeight = elem.clientHeight;
 
-        const dropELemRect = event.getRectPosition(elem);
+        this.game.setPosition(disc, coord);
+        this.placeDisc(elem, event.dragElem, disc);
 
-        if ((dragELemRect.left - dropELemRect.left) / dropElemWidth > 0.7) {
-          coord[1] += 1;
-        }
+        const { user } = this.game;
 
-        if ((dragELemRect.top - dropELemRect.top) / dropElemHeight > 0.7) {
-          coord[0] += 1;
-        }
+        this.game.checkTurn(coord);
 
-        if (coord[0] + ship.decker > this.rowNo) {
-          this.resetPreviousPos(ship);
-          return;
-        }
-
-        elem = this.getMapCell(coord);
-
-        const isShipPlaced = this.game.setPosition(ship, coord);
-
-        if (elem && isShipPlaced) {
-          this.placeShip(elem, event.dragElem, ship);
-
-          if (this.game.isAllShipsReady()) {
-            this.enableReadyButton = true;
-          }
-        } else if (ship.position && ship.position.length) {
-          this.resetPreviousPos(ship);
-        } else {
-          this.resetPos(ship);
-        }
-      } else if (ship.position && ship.position.length
-        && targetShip && targetShip.position && targetShip.position.length) {
-        this.resetPreviousPos(ship);
+        socket.emit('fire', {
+          user,
+          cell
+        });
       } else {
-        this.resetPos(ship);
+        this.resetPos(disc);
       }
     },
 
-    placeShip(cellElem, shipElem, ship) {
-      if (!cellElem || !shipElem) return;
+    placeDisc(cellElem, discElem) {
+      if (!cellElem || !discElem) return;
 
-      const container = document.getElementById('board-container');
+      const container = document.getElementById('board-table');
       const containerRect = container.getBoundingClientRect();
       const containerScrollLeft = container.scrollLeft;
 
       const rect = cellElem.getBoundingClientRect();
       let { left, top } = rect;
 
-      if (ship.arrange === 'horizontal') {
-        const dy = (cellElem.clientHeight / 2) - (shipElem.clientHeight / 2);
-        top += dy;
-        left -= 1;
-      } else {
-        const dx = (cellElem.clientWidth / 2) - (shipElem.clientWidth / 2);
-        left += dx;
-      }
+      top -= discElem.clientHeight / 2;
+      left -= discElem.clientWidth / 2;
 
       const dropELemRect = {
         left,
@@ -361,62 +358,29 @@ export default {
         startDragPosition: dropELemRect,
         currentDragPosition: dropELemRect,
         prevPosition: dropELemRect
-      }, shipElem);
+      }, discElem);
 
-      shipElem.style.left = `${Math.floor(dropELemRect.relLeft)}px`;
-      shipElem.style.top = `${Math.floor(dropELemRect.relTop)}px`;
+      discElem.style.left = `${Math.floor(dropELemRect.relLeft)}px`;
+      discElem.style.top = `${Math.floor(dropELemRect.relTop)}px`;
     },
 
-    resetPos(ship) {
-      const shipElem = this.getMapShip(ship.name);
-      this.game.resetShipPos(ship);
+    resetPos(disc) {
+      this.game.resetDiscPos(disc);
 
-      dom.removeClass(shipElem, 'ship--horizontal');
-      dom.addClass(shipElem, 'ship--vertical');
-
-      ship.draggable.resetInitialPos = true;
+      disc.draggable.resetInitialPos = true;
 
       setTimeout(() => {
-        ship.draggable.resetInitialPos = false;
+        disc.draggable.resetInitialPos = false;
       }, 0);
     },
 
-    resetPreviousPos(ship) {
-      ship.draggable.resetPreviousPos = true;
+    resetPreviousPos(disc) {
+      disc.draggable.resetPreviousPos = true;
 
       setTimeout(() => {
-        ship.draggable.resetPreviousPos = false;
+        disc.draggable.resetPreviousPos = false;
       }, 0);
     },
-
-    ready() {
-      const { user, ships, } = this.game;
-
-      this.enableReadyButton = false;
-      this.enableLazyButton = false;
-
-      socket.emit('ready', {
-        user,
-        ships
-      });
-    },
-
-    fire(e) {
-      const elem = e.nodeType === 1 ? e : e.currentTarget;
-      const cell = elem.getAttribute('data-cell');
-      const { user } = this.game;
-
-      if (this.firing || !this.game.isMyTurn) {
-        return;
-      }
-
-      this.firing = true;
-
-      socket.emit('fire', {
-        user,
-        cell
-      });
-    }
   }
 };
 </script>

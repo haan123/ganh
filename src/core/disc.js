@@ -8,26 +8,12 @@ class Disc {
   constructor(options) {
     const {
       name,
-      type,
-      bluePrint,
-      arrange
+      type
     } = options;
 
-    this.buildDisc(bluePrint);
-
-    this.type = type;
     this.name = name;
-    this.damage = 0;
-    this.arrange = arrange;
+    this.type = type;
     this.position = [];
-  }
-
-  setArrange(arrange) {
-    this.arrange = arrange;
-  }
-
-  rotate() {
-    this.setArrange(this.arrange === 'horizontal' ? 'vertical' : 'horizontal');
   }
 
   resetPosition() {
@@ -37,12 +23,6 @@ class Disc {
   setPosition(pos) {
     this.resetPosition();
     pos.map(p => this.position.push(p));
-  }
-
-  buildDisc(bluePrint) {
-    Object.keys(bluePrint).map((prop) => {
-      this[prop] = bluePrint[prop];
-    });
   }
 }
 

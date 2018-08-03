@@ -8,7 +8,7 @@ const Animate = {
   init(config) {
     const {
       elem,
-      shipName,
+      discName,
       image,
       frameWidth,
       frameHeight,
@@ -25,7 +25,7 @@ const Animate = {
     clone.style.height = `${frameHeight}px`;
     clone.style.width = `${frameWidth}px`;
 
-    clone.className += ` anime-image-${shipName}`;
+    clone.className += ` anime-image-${discName}`;
 
     const containerRect = boardContainer.getBoundingClientRect();
     const rect = elem.getBoundingClientRect();

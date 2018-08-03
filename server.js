@@ -39,8 +39,8 @@ function getPlayer(players = [], user) {
   return players.find((client) => client.user === user);
 }
 
-function isWin(ships) {
-  return !ships.find(ship => ship.decker !== ship.damage);
+function isWin(discs) {
+  return !discs.find(disc => disc.decker !== disc.damage);
 }
 
 function isReadyToPlay(players) {
@@ -129,20 +129,20 @@ io.on('connection', function (socket) {
 
     if (!player || !oppPlayer) return;
 
-    const { ships } = oppPlayer;
-    const length = ships.length;
+    const { discs } = oppPlayer;
+    const length = discs.length;
     let isMissed = true;
 
     setNextPlayerTurn(room1, players, player);
 
     for (let i = 0; i < length; i++) {
-      const ship = ships[i];
-      const { type, name, arrange, position, decker } = ship;
+      const disc = discs[i];
+      const { type, name, arrange, position, decker } = disc;
 
       if (position && position.indexOf(cell) !== -1) {
-        ship.damage++;
-        const isDestroyed = decker === ship.damage;
-        const hasWinner = isWin(ships);
+        disc.damage++;
+        const isDestroyed = decker === disc.damage;
+        const hasWinner = isWin(discs);
 
         players.map((p) => {
           const sock = io.sockets.connected[p.sid];
@@ -155,7 +155,7 @@ io.on('connection', function (socket) {
             currentTurn: user,
             isDestroyed,
             cell,
-            ship: {
+            disc: {
               type,
               name,
               arrange
@@ -198,7 +198,7 @@ io.on('connection', function (socket) {
         nextTurn: room1.turn,
         cell,
         fireStatus: 'miss',
-        ship: {}
+        disc: {}
       });
     }
   });

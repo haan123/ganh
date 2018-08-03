@@ -7,7 +7,6 @@
 .board-container {
   position: relative;
   width: 100%;
-  overflow: auto;
 }
 
 .square {
@@ -31,13 +30,12 @@
 .board__table {
   position: relative;
   width: 400px;
-  padding-bottom: 30px;
   margin: 0 auto;
-  overflow: hidden;
 
   &::after,
   &::before {
     position: absolute;
+    top: 0;
     width: 560px;
     content: "";
     border-top: 1px solid #fff;
@@ -54,6 +52,11 @@
     transform: rotate(135deg);
   }
 }
+
+  .board__frame {
+    padding-bottom: 30px;
+    overflow: hidden;
+  }
 
   .board__col {
     float: left;

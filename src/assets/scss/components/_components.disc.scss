@@ -1,0 +1,16 @@
+.disc {
+  position: absolute;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.disc-me {
+  background: #dc3545;
+}
+
+.disc-opp {
+  background: #2c3e50;
+}
