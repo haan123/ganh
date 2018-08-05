@@ -85,8 +85,13 @@ export default class Game {
     return pos;
   }
 
+  getTurnDiscs() {
+    return this.discs.filter(disc => disc.type === this.turn);
+  }
+
   checkTurn(coord) {
     const paths = {};
+    const discs = this.getTurnDiscs();
 
     Object.keys(PATH_MAP).map((key) => {
       const fn = PATH_MAP[key];
@@ -94,7 +99,20 @@ export default class Game {
       paths[key] = fn(...coord);
     });
 
-    console.log(this)
+    Object.keys(paths).map((dir) => {
+      const path = paths[dir];
+      const arr = [];
+
+      discs.map((disc) => {
+        if (path.indexOf(disc.position[0]) !== -1) {
+          arr.push(disc);
+        }
+      });
+
+      if (arr.length === 2) {
+        console.log('aaa');
+      }
+    });
   }
 
   resetDiscPos(disc) {
