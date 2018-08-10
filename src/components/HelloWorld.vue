@@ -37,7 +37,7 @@
         <div class="board">
           <div id="board-table" class="table board__table">
             <div class="disc-container">
-              <template v-for="(disc) in discs">
+               <template v-for="(disc) in discs">
                 <div :key="disc.name" :id="disc.name" v-draggable="disc.draggable" :class="{
                   disc: true,
                   [`disc-${disc.type}`]: true
@@ -89,6 +89,7 @@
     <WinnerModal></WinnerModal>
     <LooseModal></LooseModal>
     <UserConfigModal v-bind:game="game"></UserConfigModal>
+    <NewGameModal v-bind:game="game"></NewGameModal>
   </div>
 </template>
 
@@ -104,6 +105,7 @@ import Game from '../core/game';
 import WinnerModal from './WinnerModal';
 import LooseModal from './LooseModal';
 import UserConfigModal from './UserConfigModal';
+import NewGameModal from './NewGameModal';
 import modal from '../core/modal';
 import dom from '../core/dom';
 
@@ -120,6 +122,7 @@ export default {
   components: {
     WinnerModal,
     UserConfigModal,
+    NewGameModal,
     LooseModal
   },
 
@@ -128,8 +131,14 @@ export default {
   },
 
   data() {
-    socket.on('newGame', () => {
-      this.newGame(null, true);
+    socket.on('newGame', ({ discType }) => {
+      this.game.setup({
+        discType
+      });
+
+      this.game.discs.map((disc) => {
+        this.resetPos(disc);
+      });
     });
 
     socket.on('editUser', (data) => {
@@ -153,7 +162,7 @@ export default {
     });
 
     socket.on('fired', (data) => {
-      if (!data) return;
+      if (data) return;
 
       const {
         cell,
@@ -208,10 +217,6 @@ export default {
       colNo
     });
 
-    this.game.setup({
-      count: rowNo * colNo
-    });
-
     const discs = this.game.discs.map((disc) => {
       disc.draggable = {
         container: 'board-table',
@@ -243,18 +248,8 @@ export default {
   },
 
   methods: {
-    newGame(e, isEmitted) {
-      this.game.discs.map((disc) => {
-        this.resetPos(disc);
-      });
-
-      this.game.ready(false);
-
-      if (!isEmitted) {
-        socket.emit('newGame', {
-          user: this.game.user
-        });
-      }
+    newGame() {
+      modal.showModal('new-game-modal');
     },
 
     ready() {
@@ -277,14 +272,16 @@ export default {
     },
 
     dock() {
-      const count = this.rowNo * this.colNo;
-      const boardContainer = document.getElementById('board-table');
-      const containerRect = boardContainer.getBoundingClientRect();
-
       for (let i = 0; i < START_POINTS.length; i++) {
         const cellElem = this.getDockCell(START_POINTS[i]);
         const discElem = document.getElementById(`disc-${i}`);
+        const discName = discElem.getAttribute('data-name');
+        const disc = this.game.getDisc(discName);
 
+        const cell = cellElem.getAttribute('data-cell');
+        const coord = this.game.parseCoord(cell);
+
+        this.game.setPosition(disc, coord);
         this.placeDisc(cellElem, discElem);
       }
     },
@@ -308,21 +305,23 @@ export default {
     dragEnd(elem, event) {
       const discName = event.dragElem.getAttribute('data-name');
       const disc = this.game.getDisc(discName);
-      const targetDiscName = elem.getAttribute('data-name');
-      const targetDisc = this.game.getDisc(targetDiscName);
 
       if (elem && elem.closest('.droppable')) {
         elem = elem.parentNode;
-        const dragELemRect = event.getRectPosition();
         const cell = elem.getAttribute('data-cell');
         const coord = this.game.parseCoord(cell);
 
-        this.game.setPosition(disc, coord);
         this.placeDisc(elem, event.dragElem, disc);
+
+        if (disc.cell === cell) {
+          return;
+        }
+
+        this.game.setPosition(disc, coord);
 
         const { user } = this.game;
 
-        this.game.checkTurn(coord);
+        this.game.move(coord);
 
         socket.emit('fire', {
           user,
@@ -366,6 +365,8 @@ export default {
 
     resetPos(disc) {
       this.game.resetDiscPos(disc);
+
+      this.dock();
 
       disc.draggable.resetInitialPos = true;
 

@@ -14,6 +14,7 @@ class Disc {
     this.name = name;
     this.type = type;
     this.position = [];
+    this.cell = '';
   }
 
   resetPosition() {

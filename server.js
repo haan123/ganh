@@ -69,7 +69,7 @@ io.on('connection', function (socket) {
   socket.on('newGame', function (data) {
     console.log(`${data.user} set up new game`);
 
-    const { user } = data;
+    const { user, discType } = data;
     const { players } = game.room1;
     const oppPlayer = getOppPlayer(players, user);
 
@@ -80,7 +80,9 @@ io.on('connection', function (socket) {
     });
 
     if (io.sockets.connected[oppPlayer.sid]) {
-      io.sockets.connected[oppPlayer.sid].emit('newGame');
+      io.sockets.connected[oppPlayer.sid].emit('newGame', {
+        discType: discType === 'a' ? 'b' : 'a'
+      });
     }
   });
 
