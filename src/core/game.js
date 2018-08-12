@@ -37,12 +37,15 @@ const INC = {
   horizontal: (x, y, c) => incrementor(x, y, c, [[0, -1], [0, 1]])
 };
 
+const NO_CROSS_DOCKS = ['0:1', '0:3', '1:4', '3:4'];
+
 export default class Game {
   constructor(options) {
-    this.cells = {};
+    this.docks = {};
     this.discs = [];
     this.isPlayerReady = false;
     this.isMyTurn = false;
+    this.isGamePlaying = false;
 
     this.createGrid(options);
     this.createDiscs(options);
@@ -60,6 +63,18 @@ export default class Game {
 
   isAllDiscsReady() {
     return !this.discs.find(disc => !disc.position || !disc.position.length);
+  }
+
+  isPlaying() {
+    return this.isGamePlaying;
+  }
+
+  play() {
+    this.isGamePlaying = true;
+  }
+
+  stop() {
+    this.isGamePlaying = false;
   }
 
   isReady() {
@@ -97,12 +112,6 @@ export default class Game {
     return pos;
   }
 
-  getTurnDiscs() {
-    const type = this.isMyTurn ? this.oppDiscType : this.discType;
-
-    return this.discs.filter(disc => disc.type === type);
-  }
-
   getCurrentDiscType() {
     return this.isMyTurn ? this.discType : this.oppDiscType;
   }
@@ -114,7 +123,6 @@ export default class Game {
   move(coord) {
     const paths1 = {};
     const paths2 = {};
-    const discs = this.getTurnDiscs();
     const discType = this.getCurrentDiscType();
 
     Object.keys(INC).map((key) => {
@@ -125,17 +133,17 @@ export default class Game {
     });
 
     Object.keys(paths1).map((dir) => {
-      const path = paths1[dir];
+      const [p1,, p2] = paths1[dir];
 
       if (!discType) return;
 
-      const cell1 = this.getCell(path[0]);
-      const cell2 = this.getCell(path[2]);
+      const cell1 = this.getCell(p1) || {};
+      const cell2 = this.getCell(p2) || {};
 
-      if (!cell1 || !cell2) return;
+      if (!cell1.disc || !cell2.disc) return;
 
-      if (cell1.discType === discType && cell2.discType === discType) {
-        console.log('aaa');
+      if (cell1.disc.type !== discType && cell2.disc.type !== discType) {
+        this.hideDiscs([cell1, cell2]);
       }
     });
 
@@ -144,17 +152,34 @@ export default class Game {
       const cases = [[0, 1, 2], [2, 3, 4]];
 
       cases.map((c) => {
-        const cell1 = this.getCell(path[c[0]]);
-        const cell2 = this.getCell(path[c[1]]);
-        const cell3 = this.getCell(path[c[2]]);
-console.log(path, cell1 && cell1.discType, cell3 && cell3.discType, cell2.discType, discType)
-        if (!cell1 || !cell3 || !cell2.discType || cell2.discType === discType) return;
-console.log(path, discType, c[0], c[2])
-        if (cell1.discType === discType && cell3.discType === discType) {
-          console.log('aaa');
+        const cell1 = this.getCell(path[c[0]]) || {};
+        const cell2 = this.getCell(path[c[1]]) || {};
+        const cell3 = this.getCell(path[c[2]]) || {};
+
+        if (!cell1.disc || !cell3.disc
+          || !cell2.disc || cell2.disc.type === discType) return;
+
+        if (cell1.disc.type === discType && cell3.disc.type === discType) {
+          this.hideDiscs([cell2]);
         }
       });
     });
+  }
+
+  hasWinner(turn) {
+    const type = turn === this.user ? this.oppDiscType : this.discType;
+    const discs = this.discs.filter(disc => disc.type === type);
+
+    return !discs.filter(disc => disc.cell).length;
+  }
+
+  hideDisc(cell) {
+    cell.disc.cell = '';
+    cell.disc = null;
+  }
+
+  hideDiscs(docks) {
+    docks.map(cell => this.hideDisc(cell));
   }
 
   resetDiscPos(disc) {
@@ -174,15 +199,19 @@ console.log(path, discType, c[0], c[2])
     disc.setPosition(pos.reverse());
     disc.cell = startPos;
 
-    if (oldCell) oldCell.discType = '';
-    cell.discType = disc.type;
+    if (oldCell) oldCell.disc = null;
+    cell.disc = disc;
 
     return true;
   }
 
+  getOppDiscType(type) {
+    return type === 'a' ? 'b' : 'a';
+  }
+
   setup({ discType }) {
     this.discType = discType;
-    this.oppDiscType = discType === 'a' ? 'b' : 'a';
+    this.oppDiscType = this.getOppDiscType(discType);
   }
 
   createCoord(x, y) {
@@ -199,14 +228,33 @@ console.log(path, discType, c[0], c[2])
     if (!coord) return;
 
     const [x, y] = this.parseCoord(coord);
-    return this.cells[`${x}:${y}`];
+    return this.docks[`${x}:${y}`];
   }
 
   createGrid({ rowNo, colNo }) {
+    let noCrossDocks = [];
+
+    NO_CROSS_DOCKS.map((c) => {
+      const coord = this.parseCoord(c);
+
+      Object.keys(INC).map((key) => {
+        if (key.toLowerCase().indexOf('cross') !== -1) {
+          const fn = INC[key];
+          const arr = fn(...coord, 4);
+
+          noCrossDocks = [...noCrossDocks, ...arr];
+        }
+      });
+    });
+console.log(noCrossDocks)
     for (let row = 0; row < rowNo + 1; row++) {
       for (let col = 0; col < colNo + 1; col++) {
-        this.cells[`${row}:${col}`] = {
-          discType: ''
+        const coord = this.createCoord(row, col);
+        let validMoves = [];
+
+        this.docks[coord] = {
+          disc: null,
+          validMoves
         };
       }
     }

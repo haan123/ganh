@@ -46,16 +46,6 @@ export default {
     start() {
       const discType = this.$refs.rd1.checked ? 'a' : 'b';
 
-      this.game.setup({
-        discType
-      });
-
-      this.game.setTurn(this.game.user);
-
-      this.game.discs.map((disc) => {
-        this.$parent.resetPos(disc);
-      });
-
       socket.emit('newGame', {
         discType,
         user: this.game.user

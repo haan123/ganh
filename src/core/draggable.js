@@ -66,7 +66,7 @@ export const Draggable = {
   },
 
   update(el, binding) {
-    if (binding.value && binding.value.stopDragging) {
+    if (!binding.value || (binding.value && binding.value.stopDragging)) {
       return;
     }
 

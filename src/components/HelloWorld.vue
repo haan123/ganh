@@ -4,14 +4,14 @@
       <div :class="{
         'user': true,
         'badge': true,
-        'badge-warning': game.isReady() && game.isMyTurn,
-        'badge-dark': !game.isReady() || !game.isMyTurn
+        'badge-warning': game.isPlaying() && game.isMyTurn,
+        'badge-dark': !game.isPlaying() || !game.isMyTurn
       }">
         {{player}}
-        <span v-if="!game.isReady()" @click="editUser"><svgicon class="user__edit" icon="pencil" width="14" height="14" color="#f1f1f1"></svgicon></span>
+        <span v-if="!game.isPlaying()" @click="editUser"><svgicon class="user__edit" icon="pencil" width="14" height="14" color="#f1f1f1"></svgicon></span>
       </div>
       <span v-bind:ref="arrow" class="arrow-icon" :style="{
-        'display': game.isReady() ? 'block' : 'none'
+        'display': game.isPlaying() ? 'block' : 'none'
       }">
         <span class="left-bar"></span>
         <span class="right-bar"></span>
@@ -19,8 +19,8 @@
       <div :class="{
         'user': true,
         'badge': true,
-        'badge-warning': game.isReady() && !game.isMyTurn,
-        'badge-dark': !game.isReady() || game.isMyTurn
+        'badge-warning': game.isPlaying() && !game.isMyTurn,
+        'badge-dark': !game.isPlaying() || game.isMyTurn
       }">{{oppPlayer}}</div>
     </div>
     <div class="widgets">
@@ -31,29 +31,28 @@
 
     <div id="board-container" :class="{
       'board-container': true,
-      'is-ready': game.isReady()
+      'is-playing': game.isPlaying()
     }">
       <div class="board__inner">
         <div class="board">
           <div id="board-table" class="table board__table">
             <div class="disc-container">
-               <template v-for="(disc) in discs">
+               <template v-for="disc in discs">
                 <div :key="disc.name" :id="disc.name" v-draggable="disc.draggable" :class="{
                   disc: true,
-                  [`disc-${disc.type}`]: true
+                  [`disc-${disc.type}`]: true,
+                  'is-lost': !disc.cell
                 }" :data-name="disc.name"></div>
               </template>
             </div>
             <div class="dock-container">
-              <template v-for="(_, row) in (rowNo + 1)">
-                <template v-for="(_, col) in (colNo + 1)">
-                  <div v-bind:ref="`dock[${row}:${col}]`" :data-coord="`${row}:${col}`" :class="{
-                    dock: true,
-                    [`dock-${row}${col}`]: true
-                  }" :data-cell="`${row}:${col}`" :title="`${row}:${col}`" :key="`${row}${col}`">
-                    <div class="dock__drop droppable"></div>
-                  </div>
-                </template>
+              <template v-for="(dock, key) in docks">
+                <div v-bind:ref="`dock[${key}]`" :data-dock="key" :class="{
+                  dock: true,
+                  [`dock-${key}`]: true
+                }" :title="key" :key="`${key}`">
+                  <div class="dock__drop droppable"></div>
+                </div>
               </template>
             </div>
             <div class="board__frame">
@@ -131,14 +130,37 @@ export default {
   },
 
   data() {
-    socket.on('newGame', ({ discType }) => {
+    socket.on('newGame', ({ discType, turn }) => {
+      if (turn !== this.game.user) {
+        discType = this.game.getOppDiscType(discType);
+      }
+
       this.game.setup({
         discType
       });
 
       this.game.discs.map((disc) => {
         this.resetPos(disc);
+
+        if (disc.type === discType) {
+          disc.draggable.stopDragging = false;
+        } else {
+          disc.draggable.stopDragging = true;
+        }
       });
+
+      this.game.setTurn(turn);
+
+      document.title = document.title.replace(/\s?\([\w\W]+\)/g, '');
+      document.title += ` (${turn})`;
+
+      if (!this.game.isMyTurn) {
+        dom.addClass(this.$refs.arrow, 'open');
+      } else {
+        dom.removeClass(this.$refs.arrow, 'open');
+      }
+
+      this.game.play();
     });
 
     socket.on('editUser', (data) => {
@@ -147,66 +169,54 @@ export default {
 
     socket.on('ready', (data) => {
       this.game.ready(true);
-      this.game.setTurn(data.turn);
-
-      document.title = document.title.replace(/\s?\([\w\W]+\)/g, '');
-      document.title += ` (${data.turn})`;
-
-      if (!this.game.isMyTurn) {
-        dom.addClass(this.$refs.arrow, 'open');
-        this.oppPlayer = data.turn;
-      } else {
-        dom.removeClass(this.$refs.arrow, 'open');
-        this.oppPlayer = data.oppPlayer;
-      }
+      this.oppPlayer = data.oppPlayer;
     });
 
-    socket.on('fired', (data) => {
-      if (data) return;
+    socket.on('moved', (data) => {
+      if (!data) return;
 
       const {
         cell,
-        isDestroyed,
-        fireStatus,
-        hasWinner,
-        winner,
         currentTurn,
-        nextTurn,
-        disc
+        discName,
+        nextTurn
       } = data;
 
       const isMyTurn = currentTurn === this.game.user;
-      const elem = isMyTurn ? this.getActCell(cell) : this.getMapCell(cell);
+      const coord = this.game.parseCoord(cell);
+      const disc = this.game.getDisc(discName);
 
-      if (elem) {
-        this.game.fire(cell, elem, {
-          fireStatus,
-          isDestroyed,
-          disc
-        });
+      this.game.setPosition(disc, coord);
+      this.game.move(coord);
 
-        this.game.setTurn(nextTurn);
+      this.game.setTurn(currentTurn || nextTurn);
 
-        document.title = document.title.replace(/\s?\([\w\W]+\)/g, '');
+      if (!isMyTurn) {
+        const elem = this.getDockCell(cell);
+        const discElem = this.getDiscElem(discName);
 
-        if (this.game.isMyTurn) {
-          dom.removeClass(this.$refs.arrow, 'open');
-          document.title += ` (${this.game.user})`;
+        this.placeDisc(elem, discElem);
+      }
+
+      document.title = document.title.replace(/\s?\([\w\W]+\)/g, '');
+
+      if (this.game.isMyTurn) {
+        dom.removeClass(this.$refs.arrow, 'open');
+        document.title += ` (${this.game.user})`;
+      } else {
+        dom.addClass(this.$refs.arrow, 'open');
+        document.title += ` (${this.oppPlayer})`;
+      }
+
+      if (this.game.hasWinner(currentTurn)) {
+        if (currentTurn === this.game.user) {
+          modal.showModal('modal-winner');
         } else {
-          dom.addClass(this.$refs.arrow, 'open');
-          document.title += ` (${this.oppPlayer})`;
-        }
-
-        if (hasWinner) {
-          if (winner === this.game.user) {
-            modal.showModal('modal-winner');
-          } else {
-            modal.showModal('modal-loose');
-          }
+          modal.showModal('modal-loose');
         }
       }
 
-      this.firing = false;
+      this.moving = false;
     });
 
     const rowNo = 4;
@@ -217,12 +227,13 @@ export default {
       colNo
     });
 
-    const discs = this.game.discs.map((disc) => {
+    this.game.discs.map((disc) => {
       disc.draggable = {
         container: 'board-table',
         onDragEnd: this.dragEnd,
         resetInitialPos: false,
-        resetPreviousPos: false
+        resetPreviousPos: false,
+        stopDragging: true
       };
 
       return disc;
@@ -233,8 +244,8 @@ export default {
       arrow: 'arrow',
       rowNo,
       colNo,
-      cells: this.game.cells,
-      discs,
+      discs: this.game.discs,
+      docks: this.game.docks,
       isMyTurn: this.game.isMyTurn,
       oppPlayer: '(ᵔᴥᵔ)',
       player: '(ᵔᴥᵔ)'
@@ -271,14 +282,18 @@ export default {
       return arr && arr[0];
     },
 
+    getDiscElem(name) {
+      return document.getElementById(name);
+    },
+
     dock() {
       for (let i = 0; i < START_POINTS.length; i++) {
         const cellElem = this.getDockCell(START_POINTS[i]);
-        const discElem = document.getElementById(`disc-${i}`);
+        const discElem = this.getDiscElem(`disc-${i}`);
         const discName = discElem.getAttribute('data-name');
         const disc = this.game.getDisc(discName);
 
-        const cell = cellElem.getAttribute('data-cell');
+        const cell = cellElem.getAttribute('data-dock');
         const coord = this.game.parseCoord(cell);
 
         this.game.setPosition(disc, coord);
@@ -308,23 +323,19 @@ export default {
 
       if (elem && elem.closest('.droppable')) {
         elem = elem.parentNode;
-        const cell = elem.getAttribute('data-cell');
-        const coord = this.game.parseCoord(cell);
+        const cell = elem.getAttribute('data-dock');
 
-        this.placeDisc(elem, event.dragElem, disc);
+        this.placeDisc(elem, event.dragElem);
 
         if (disc.cell === cell) {
           return;
         }
 
-        this.game.setPosition(disc, coord);
-
         const { user } = this.game;
 
-        this.game.move(coord);
-
-        socket.emit('fire', {
+        socket.emit('move', {
           user,
+          discName,
           cell
         });
       } else {

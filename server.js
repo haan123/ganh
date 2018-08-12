@@ -39,18 +39,16 @@ function getPlayer(players = [], user) {
   return players.find((client) => client.user === user);
 }
 
-function isWin(discs) {
-  return !discs.find(disc => disc.decker !== disc.damage);
-}
-
 function isReadyToPlay(players) {
-  return players.length === 2 && !players.find(player => player.ready === false);
+  return players.length === 2;
 }
 
 function setNextPlayerTurn(room, players, player) {
   const nextPlayer = players.find(p => p.user !== player.user);
 
   room.turn = nextPlayer.user;
+
+  return nextPlayer.user;
 }
 
 const router = new Router();
@@ -75,15 +73,12 @@ io.on('connection', function (socket) {
 
     if (!players || !players.length || !oppPlayer) return;
 
-    players.map(player => {
-      player.ready = false;
-    });
+    game.room1.turn = user;
 
-    if (io.sockets.connected[oppPlayer.sid]) {
-      io.sockets.connected[oppPlayer.sid].emit('newGame', {
-        discType: discType === 'a' ? 'b' : 'a'
-      });
-    }
+    io.sockets.emit('newGame', {
+      turn: user,
+      discType
+    });
   });
 
   socket.on('ready', function (data) {
@@ -98,31 +93,30 @@ io.on('connection', function (socket) {
     });
 
     data.sid = socket.id;
-    data.ready = true;
     players.push(data);
 
-    let turn;
     const isReady = isReadyToPlay(players);
 
-    if (isReady) {
-      turn = players[0].user;
-    }
-
-    game.room1.turn = turn;
     game.room1.players = players;
 
     if (isReady) {
-      io.sockets.emit('ready', {
-        turn,
-        oppPlayer: players[1].user
+      players.map((p) => {
+        const sock = io.sockets.connected[p.sid];
+        const { user } = getOppPlayer(players, p.user);
+
+        if (sock) {
+          sock.emit('ready', {
+            oppPlayer: user
+          });
+        }
       });
     }
   });
 
-  socket.on('fire', function (data) {
-    console.log(`${data.user} fired`);
+  socket.on('move', function (data) {
+    console.log(`${data.user} moved`);
 
-    const { user } = data;
+    const { user, discName } = data;
     let { cell } = data;
     const { room1 } = game;
     const { players } = room1;
@@ -131,77 +125,22 @@ io.on('connection', function (socket) {
 
     if (!player || !oppPlayer) return;
 
-    const { discs } = oppPlayer;
-    const length = discs.length;
-    let isMissed = true;
+    const nextTurn = setNextPlayerTurn(room1, players, player);
 
-    setNextPlayerTurn(room1, players, player);
+    players.map((p) => {
+      const sock = io.sockets.connected[p.sid];
 
-    for (let i = 0; i < length; i++) {
-      const disc = discs[i];
-      const { type, name, arrange, position, decker } = disc;
-
-      if (position && position.indexOf(cell) !== -1) {
-        disc.damage++;
-        const isDestroyed = decker === disc.damage;
-        const hasWinner = isWin(discs);
-
-        players.map((p) => {
-          const sock = io.sockets.connected[p.sid];
-
-          if (isDestroyed) {
-            cell = position[position.length - 1];
-          }
-
-          let fireData = {
-            currentTurn: user,
-            isDestroyed,
-            cell,
-            disc: {
-              type,
-              name,
-              arrange
-            }
-          };
-
-          if (p.sid === player.sid) {
-            fireData.fireStatus = 'onTarget';
-            fireData.nextTurn = user;
-
-            if (isDestroyed) {
-              fireData.fireStatus = 'oppDestroyed';
-            }
-          } else {
-            fireData.fireStatus = 'hit';
-            fireData.nextTurn = user;
-
-            if (isDestroyed) {
-              fireData.fireStatus = 'destroyed';
-            }
-          }
-
-          if (hasWinner) {
-            fireData.hasWinner = true;
-            fireData.winner = user;
-          }
-
-          sock.emit('fired', fireData);
-        });
-
-        isMissed = false;
-
-        break;
-      }
-    }
-
-    if (isMissed) {
-      io.sockets.emit('fired', {
+      let moveData = {
         currentTurn: user,
-        nextTurn: room1.turn,
-        cell,
-        fireStatus: 'miss',
-        disc: {}
-      });
-    }
+        nextTurn,
+        discName,
+        cell
+      };
+
+      if (sock) {
+        sock.emit('moved', moveData);
+      }
+    });
+
   });
 });
