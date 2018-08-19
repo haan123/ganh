@@ -6,6 +6,15 @@
 
 import Disc from './disc';
 
+function sortPath(path) {
+  return path.sort((a, b) => {
+    a = +a.replace(':', '');
+    b = +b.replace(':', '');
+
+    return a - b;
+  });
+}
+
 function incrementor(x, y, c, increment) {
   const path = [`${x}:${y}`];
 
@@ -22,12 +31,7 @@ function incrementor(x, y, c, increment) {
     }
   });
 
-  return path.sort((a, b) => {
-    a = +a.replace(':', '');
-    b = +b.replace(':', '');
-
-    return a - b;
-  });
+  return sortPath(path);
 }
 
 const INC = {
@@ -46,6 +50,7 @@ export default class Game {
     this.isPlayerReady = false;
     this.isMyTurn = false;
     this.isGamePlaying = false;
+    this.disintegrate = options.disintegrate;
 
     this.createGrid(options);
     this.createDiscs(options);
@@ -116,8 +121,10 @@ export default class Game {
     return this.isMyTurn ? this.discType : this.oppDiscType;
   }
 
-  checkCentreCase() {
+  isValidMove(currentCoord, nextCoord) {
+    const cell = this.getCell(currentCoord);
 
+    return cell.validMoves.indexOf(nextCoord) !== -1;
   }
 
   move(coord) {
@@ -179,7 +186,11 @@ export default class Game {
   }
 
   hideDiscs(docks) {
-    docks.map(cell => this.hideDisc(cell));
+    this.disintegrate.animate(docks.map(dock => dock.disc.name));
+
+    docks.map((cell) => {
+      this.hideDisc(cell);
+    });
   }
 
   resetDiscPos(disc) {
@@ -231,7 +242,15 @@ export default class Game {
     return this.docks[`${x}:${y}`];
   }
 
-  createGrid({ rowNo, colNo }) {
+  filterPath(rowNo, colNo, path) {
+    return path.filter((coord, i) => {
+      const [x, y] = this.parseCoord(coord);
+
+      return x >= 0 && y >= 0 && x <= rowNo && y <= colNo && path.indexOf(coord) === i;
+    });
+  }
+
+  getNoCrossDocks(rowNo, colNo) {
     let noCrossDocks = [];
 
     NO_CROSS_DOCKS.map((c) => {
@@ -246,11 +265,36 @@ export default class Game {
         }
       });
     });
-console.log(noCrossDocks)
-    for (let row = 0; row < rowNo + 1; row++) {
-      for (let col = 0; col < colNo + 1; col++) {
-        const coord = this.createCoord(row, col);
+
+    noCrossDocks = this.filterPath(rowNo, colNo, noCrossDocks);
+
+    return sortPath(noCrossDocks);
+  }
+
+  createGrid({ rowNo, colNo }) {
+    const noCrossDocks = this.getNoCrossDocks(rowNo, colNo);
+
+    for (let x = 0; x < rowNo + 1; x++) {
+      for (let y = 0; y < colNo + 1; y++) {
+        const coord = this.createCoord(x, y);
         let validMoves = [];
+
+        Object.keys(INC).map((key) => {
+          if (key.toLowerCase().indexOf('cross') !== -1 && noCrossDocks.indexOf(coord) !== -1) {
+            return;
+          }
+
+          const fn = INC[key];
+
+          const path = this.filterPath(rowNo, colNo, fn(x, y, 1))
+            .filter(c => c !== coord);
+
+          if (path.length) {
+            validMoves = [...validMoves, ...path];
+          }
+        });
+
+        validMoves = sortPath(validMoves);
 
         this.docks[coord] = {
           disc: null,

@@ -1,0 +1,25 @@
+  /* Generic click behavior */
+  [data-dis-type="self-contained"] {
+    cursor: pointer;
+    border-radius: 15px;
+  }
+  // [data-dis-container] {
+  //   animation: slideLeft500 0.5s ease-in paused;
+  // }
+  [data-dis-type] {
+    animation: slideRight500 0.5s ease-in paused;
+  }
+  @keyframes slideLeft500 {
+    100% { transform: translateX(-500px); }
+  }
+  @keyframes slideRight500 {
+    100% { transform: translateX(500px); }
+  }
+  /* Start the animation we add a class */
+  .animate,
+  .animate [data-dis-type] {
+    /* Start the animation */
+    animation-play-state: running !important;
+    /* Make sure it doesn't show until we want it to */
+    animation-fill-mode: forwards !important;
+  }

@@ -39,10 +39,12 @@
             <div class="disc-container">
                <template v-for="disc in discs">
                 <div :key="disc.name" :id="disc.name" v-draggable="disc.draggable" :class="{
-                  disc: true,
+                  'disc-wrap': true,
                   [`disc-${disc.type}`]: true,
                   'is-lost': !disc.cell
-                }" :data-name="disc.name"></div>
+                }" :data-name="disc.name">
+                  <div class="disc" data-dis-type="self-contained"></div>
+                </div>
               </template>
             </div>
             <div class="dock-container">
@@ -99,6 +101,7 @@
 /* eslint consistent-return: 0 */
 /* eslint array-callback-return: 0 */
 
+import disintegrate from '../core/disintegrate';
 import { setState, Draggable } from '../core/draggable';
 import Game from '../core/game';
 import WinnerModal from './WinnerModal';
@@ -224,6 +227,7 @@ export default {
 
     this.game = new Game({
       rowNo,
+      disintegrate,
       colNo
     });
 
@@ -256,6 +260,21 @@ export default {
     this.checkUser();
     this.dock();
     this.ready();
+
+    disintegrate.init();
+
+    window.addEventListener("disesLoaded", function() {
+      disintegrate.dises.forEach(function(disObj) {
+        if(disObj.elem.dataset.disType === "self-contained") {
+          function resetCSSAnimation(el) {
+            el.style.animation = "none";
+            setTimeout(function() {
+                el.style.animation = "";
+            }, 10);
+          }
+        }
+      });
+    });
   },
 
   methods: {
@@ -325,11 +344,12 @@ export default {
         elem = elem.parentNode;
         const cell = elem.getAttribute('data-dock');
 
-        this.placeDisc(elem, event.dragElem);
-
-        if (disc.cell === cell) {
+        if (disc.cell === cell/* || !this.game.isValidMove(disc.cell, cell)*/) {
+          this.resetPreviousPos(disc);
           return;
         }
+
+        this.placeDisc(elem, event.dragElem);
 
         const { user } = this.game;
 
