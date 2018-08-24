@@ -268,19 +268,6 @@ export default {
     this.ready();
 
     disintegrate.init();
-
-    window.addEventListener("disesLoaded", function() {
-      disintegrate.dises.forEach(function(disObj) {
-        if(disObj.elem.dataset.disType === "self-contained") {
-          function resetCSSAnimation(el) {
-            el.style.animation = "none";
-            setTimeout(function() {
-                el.style.animation = "";
-            }, 10);
-          }
-        }
-      });
-    });
   },
 
   methods: {
@@ -396,7 +383,7 @@ export default {
     },
 
     dragStart(e) {
-      var discWrap = e.currentTarget;
+      const discWrap = e.currentTarget;
       const discName = discWrap.getAttribute('data-name');
       const discElem = this.getDiscElem(discName);
       const disc = this.game.getDisc(discName);
@@ -443,7 +430,6 @@ export default {
         const cell = elem.getAttribute('data-dock');
 
         if (disc.cell === cell || !this.game.isValidMove(disc.cell, cell)) {
-
           if (this.endClick - this.startClick <= 250) {
             this.isDiscClicked = true;
 
