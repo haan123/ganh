@@ -5,5 +5,5 @@ deployment:
   staging:
     branch: master
     heroku:
-      appname: battledisc4fun
+      appname: ganh
 
