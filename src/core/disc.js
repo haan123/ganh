@@ -15,6 +15,11 @@ class Disc {
     this.type = type;
     this.position = [];
     this.cell = '';
+    this.isSelecting = false;
+  }
+
+  setSelect(state) {
+    this.isSelecting = state;
   }
 
   resetPosition() {

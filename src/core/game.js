@@ -6,10 +6,19 @@
 
 import Disc from './disc';
 
+const rdash = /-/g;
 function sortPath(path) {
   return path.sort((a, b) => {
-    a = +a.replace(':', '');
-    b = +b.replace(':', '');
+    a = a.replace(':', '');
+    b = b.replace(':', '');
+
+    if (a.indexOf('-') !== -1) {
+      a = -1 * parseInt(a.replace(rdash, ''), 10);
+    }
+
+    if (b.indexOf('-') !== -1) {
+      b = -1 * parseInt(b.replace(rdash, ''), 10);
+    }
 
     return a - b;
   });
@@ -54,6 +63,7 @@ export default class Game {
 
     this.createGrid(options);
     this.createDiscs(options);
+    this.setCornerDocks(options);
   }
 
   setTurn(user) {
@@ -102,6 +112,16 @@ export default class Game {
     return this.discs.find(disc => disc.name === name);
   }
 
+  getDiscByCoord(c) {
+    return this.discs.find(disc => disc.position.indexOf(c) !== -1);
+  }
+
+  unClickAllDiscs() {
+    this.discs.map((disc) => {
+      disc.setSelect(false);
+    });
+  }
+
   getPosition(coordinate, arrange, decker) {
     let [x, y] = this.parseCoord(coordinate);
     const pos = [coordinate];
@@ -122,7 +142,7 @@ export default class Game {
   }
 
   isValidMove(currentCoord, nextCoord) {
-    const cell = this.getCell(currentCoord);
+    const cell = this.getDock(currentCoord);
 
     return cell.validMoves.indexOf(nextCoord) !== -1;
   }
@@ -144,8 +164,8 @@ export default class Game {
 
       if (!discType) return;
 
-      const cell1 = this.getCell(p1) || {};
-      const cell2 = this.getCell(p2) || {};
+      const cell1 = this.getDock(p1) || {};
+      const cell2 = this.getDock(p2) || {};
 
       if (!cell1.disc || !cell2.disc) return;
 
@@ -159,9 +179,9 @@ export default class Game {
       const cases = [[0, 1, 2], [2, 3, 4]];
 
       cases.map((c) => {
-        const cell1 = this.getCell(path[c[0]]) || {};
-        const cell2 = this.getCell(path[c[1]]) || {};
-        const cell3 = this.getCell(path[c[2]]) || {};
+        const cell1 = this.getDock(path[c[0]]) || {};
+        const cell2 = this.getDock(path[c[1]]) || {};
+        const cell3 = this.getDock(path[c[2]]) || {};
 
         if (!cell1.disc || !cell3.disc
           || !cell2.disc || cell2.disc.type === discType) return;
@@ -170,6 +190,26 @@ export default class Game {
           this.hideDiscs([cell2]);
         }
       });
+    });
+
+    this.cornerDocks.map((c) => {
+      const cornerDock = this.getDock(c.corner) || {};
+
+      if (cornerDock.disc && discType !== cornerDock.disc.type) {
+        let count = 0;
+
+        c.around.map((co) => {
+          const dock = this.getDock(co) || {};
+
+          if (dock.disc && dock.disc.type === discType) {
+            count++;
+          }
+        });
+
+        if (count === 3) {
+          this.hideDiscs([cornerDock]);
+        }
+      }
     });
   }
 
@@ -181,7 +221,10 @@ export default class Game {
   }
 
   hideDisc(cell) {
-    cell.disc.cell = '';
+    const { disc } = cell;
+    disc.cell = '';
+    disc.resetPosition();
+
     cell.disc = null;
   }
 
@@ -204,8 +247,8 @@ export default class Game {
   setPosition(disc, [x, y]) {
     const startPos = this.createCoord(x, y);
     const pos = [startPos];
-    const cell = this.getCell(startPos);
-    const oldCell = this.getCell(disc.cell);
+    const cell = this.getDock(startPos);
+    const oldCell = this.getDock(disc.cell);
 
     disc.setPosition(pos.reverse());
     disc.cell = startPos;
@@ -230,16 +273,50 @@ export default class Game {
   }
 
   parseCoord(coordinate) {
-    const [x, y] = coordinate.split(':');
+    const [x, y] = Array.isArray(coordinate) ? coordinate : coordinate.split(':');
 
     return [+x, +y];
   }
 
-  getCell(coord) {
+  getDock(coord) {
     if (!coord) return;
 
     const [x, y] = this.parseCoord(coord);
     return this.docks[`${x}:${y}`];
+  }
+
+  getSelectingDisc() {
+    return this.discs.find(disc => disc.isSelecting);
+  }
+
+  clearNextMoves(docks) {
+    Object.keys(docks).map((coord) => {
+      const dock = this.getDock(coord);
+      dock.isNextMove = false;
+    });
+  }
+
+  clearAllNextMoves() {
+    this.clearNextMoves(this.docks);
+  }
+
+  setNextMoves(discName) {
+    const disc = this.getDisc(discName);
+    const dock = this.getDock(disc.position[0]);
+
+    this.clearAllNextMoves();
+
+    dock.validMoves.filter(c => !this.getDiscByCoord(c)).map((c) => {
+      const nextDock = this.getDock(c);
+
+      nextDock.isNextMove = true;
+    });
+  }
+
+  getDockByDiscName(discName) {
+    const disc = this.getDisc(discName);
+
+    return this.getDock(disc.position[0]);
   }
 
   filterPath(rowNo, colNo, path) {
@@ -271,6 +348,36 @@ export default class Game {
     return sortPath(noCrossDocks);
   }
 
+  setCornerDocks({ rowNo, colNo }) {
+    const docks = ['0:0',
+      this.createCoord(0, colNo),
+      this.createCoord(rowNo, 0),
+      this.createCoord(rowNo, colNo)
+    ];
+
+    const cornerDocks = [];
+
+    docks.map((coord) => {
+      let around = [];
+
+      Object.keys(INC).map((key) => {
+        const fn = INC[key];
+        const path = fn(...this.parseCoord(coord), 1);
+        around = [...around, ...path];
+      });
+
+      around = this.filterPath(rowNo, colNo, around);
+      around.splice(around.indexOf(coord), 1);
+      around = sortPath(around);
+      cornerDocks.push({
+        corner: coord,
+        around
+      });
+    });
+
+    this.cornerDocks = cornerDocks;
+  }
+
   createGrid({ rowNo, colNo }) {
     const noCrossDocks = this.getNoCrossDocks(rowNo, colNo);
 
@@ -298,6 +405,7 @@ export default class Game {
 
         this.docks[coord] = {
           disc: null,
+          isNextMove: false,
           validMoves
         };
       }

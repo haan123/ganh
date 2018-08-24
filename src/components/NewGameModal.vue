@@ -7,11 +7,15 @@
             <label class="user__ticker">Pick color:</label>
             <div class="form-check form-check-inline">
               <input id="inlineRadio1" v-bind:ref="rd1" class="form-check-input ticker-ipt" type="radio" name="ticker" value="a" checked>
-              <label class="form-check-label disc disc-a disc-sample-a" for="inlineRadio1"></label>
+              <label class="form-check-label disc-a" for="inlineRadio1">
+                <div class="disc disc-sample-a"></div>
+              </label>
             </div>
             <div class="form-check form-check-inline">
               <input id="inlineRadio2" v-bind:ref="rd2" class="form-check-input ticker-ipt" type="radio" name="ticker" value="b">
-              <label class="form-check-label disc disc-b disc-sample-b" for="inlineRadio2"></label>
+              <label class="form-check-label disc-b" for="inlineRadio2">
+                <div class="disc disc-sample-b"></div>
+              </label>
             </div>
           </div>
         </div>

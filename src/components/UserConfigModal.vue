@@ -40,6 +40,7 @@ export default {
       this.game.setUser(user);
 
       this.$parent.checkUser();
+      this.$parent.ready();
 
       modal.hideModal('user-config-modal');
     }

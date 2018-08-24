@@ -97,12 +97,6 @@ function addParticleType(func) {
   disParticleTypes.push(func);
 }
 
-// Returns a Uint8ClampedArray of image color data in r, g, b, a format per pixel
-// for the whole given Disintegrate object
-function getAllImageData(disObj) {
-  return disObj.scrnCtx.getImageData(0, 0, disObj.actualWidth, disObj.actualHeight).data;
-}
-
 // Create a particle of the declared type at the given position using the given color
 function createParticle(disObj, localX, localY, worldX, worldY, rgbArr, arrayIndex) {
   let dontCreate = false;
@@ -420,42 +414,6 @@ function checkOutOfBounds(disObj) {
   }
 }
 
-// Creates particles for the entire given Disintegrate object at once, to be
-// customized by the particle type used
-function createSimultaneousParticles(disObj) {
-  const dimensions = getVisibleDimensions(disObj.elem, disObj.container);
-  const pos = dimensions.boundingRect;
-
-  const screenshotData = getAllImageData(disObj);
-
-  disObj.particleArr[0] = {
-    startTime: Date.now(),
-    myParticles: []
-  };
-
-  // Process the pixels
-  if (screenshotData) {
-    for (let i = 0; i < screenshotData.length; i += 4) {
-      // Do it every once in a while
-      if (disObj.count % disObj.particleReductionFactor === 0) {
-        const worldX = pos.left + ((i / 4) % dimensions.width);
-        const worldY = pos.top + Math.floor((i / 4) / dimensions.width);
-
-        let colorData;
-        if (disObj.particleColor.length > 0) {
-          colorData = disObj.particleColor;
-        } else {
-          colorData = screenshotData.slice(i, i + 4);
-        }
-
-        // Create a particle of the given pixel color at the given location
-        createParticle(disObj, worldX - pos.left, worldY - pos.top, worldX, worldY, colorData, 0);
-      }
-      disObj.count++;
-    }
-  }
-}
-
 let timer;
 // Animate all existing particles of the given Disintegrate element
 // using their built in draw function
@@ -477,6 +435,7 @@ function animateParticles(disObj) {
       disObj.particleArr = [];
       // Mark complete
       disObj.elem.dispatchEvent(new Event('disComplete'));
+      disObj.elem.classList.remove('animate', 'disintegrate');
       disObj.isAnimating = false;
       window.cancelAnimationFrame(timer);
     }
@@ -489,7 +448,7 @@ function disUpdate(data, originPos) {
     disUpdate(data, originPos);
   });
 
-  dises.forEach((disObj) => {
+  data.animatingDises.forEach((disObj) => {
     if (disObj.type !== 'simultaneous') {
       originPos = originPos || getCoords(disObj.elem);
 
@@ -501,15 +460,19 @@ function disUpdate(data, originPos) {
 }
 
 function animate(ids) {
+  const animatingDises = [];
+
   dises.map((dis) => {
     const { elem } = dis;
     if (ids.indexOf(elem.parentNode.parentNode.id) !== -1) {
-      elem.classList.add('animate');
+      elem.classList.add('animate', 'disintegrate');
+      animatingDises.push(dis);
     }
   });
 
   disUpdate({
-    ids
+    ids,
+    animatingDises
   });
 }
 
@@ -577,7 +540,6 @@ function processDisElement(el) {
     wrapper.dataset.disContainer = '';
     wrapper.style.width = `${disObj.lastWidth}px`;
     wrapper.style.height = `${disObj.lastHeight}px`;
-    wrapper.style.overflow = 'hidden';
     const elemStyles = window.getComputedStyle(el);
     wrapper.style.position = elemStyles.getPropertyValue('position');
     wrapper.style.margin = elemStyles.getPropertyValue('margin');
@@ -734,7 +696,6 @@ export default {
   init,
   dises,
   animate,
-  createSimultaneousParticles,
   getDisObj,
   addParticleType
 };

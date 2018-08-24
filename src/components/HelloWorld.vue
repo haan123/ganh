@@ -27,7 +27,7 @@
       <button @click="newGame" class="btn btn-danger btn-lg play">New Game</button>&nbsp;
     </div>
 
-    <p class="game-guide">Discs cannot occupy squares next to each other, horizontally, vertically or diagonally, you can place a disc by dragging the disc from the disc base.</p>
+    <p class="game-guide">How to play <a href="https://www.youtube.com/watch?v=FU3auCFYGJc" target="_blank">Gánh Chess</a>.</p>
 
     <div id="board-container" :class="{
       'board-container': true,
@@ -43,17 +43,20 @@
                   [`disc-${disc.type}`]: true,
                   'is-lost': !disc.cell
                 }" :data-name="disc.name">
-                  <div class="disc" data-dis-type="self-contained"></div>
+                  <div class="disc animated" data-dis-type="self-contained"></div>
                 </div>
               </template>
             </div>
             <div class="dock-container">
               <template v-for="(dock, key) in docks">
-                <div v-bind:ref="`dock[${key}]`" :data-dock="key" :class="{
+                <div v-bind:ref="`dock[${key}]`" @click="dockClick" :data-dock="key" :class="{
                   dock: true,
+                  animated: true,
+                  [`is-next-${selectingDisc && selectingDisc.type}-move`]: dock.isNextMove,
                   [`dock-${key}`]: true
                 }" :title="key" :key="`${key}`">
                   <div class="dock__drop droppable"></div>
+                  <div class="reveal-ripple"></div>
                 </div>
               </template>
             </div>
@@ -144,12 +147,6 @@ export default {
 
       this.game.discs.map((disc) => {
         this.resetPos(disc);
-
-        if (disc.type === discType) {
-          disc.draggable.stopDragging = false;
-        } else {
-          disc.draggable.stopDragging = true;
-        }
       });
 
       this.game.setTurn(turn);
@@ -159,9 +156,14 @@ export default {
 
       if (!this.game.isMyTurn) {
         dom.addClass(this.$refs.arrow, 'open');
+        this.disableAllDrag();
       } else {
         dom.removeClass(this.$refs.arrow, 'open');
+        this.enableDrag(discType);
       }
+
+      this.game.unClickAllDiscs();
+      this.game.clearAllNextMoves();
 
       this.game.play();
     });
@@ -192,13 +194,13 @@ export default {
       this.game.setPosition(disc, coord);
       this.game.move(coord);
 
-      this.game.setTurn(currentTurn || nextTurn);
+      this.game.setTurn(nextTurn);
 
       if (!isMyTurn) {
         const elem = this.getDockCell(cell);
-        const discElem = this.getDiscElem(discName);
+        const discWrap = this.getDiscWrap(discName);
 
-        this.placeDisc(elem, discElem);
+        this.placeDisc(elem, discWrap);
       }
 
       document.title = document.title.replace(/\s?\([\w\W]+\)/g, '');
@@ -206,9 +208,11 @@ export default {
       if (this.game.isMyTurn) {
         dom.removeClass(this.$refs.arrow, 'open');
         document.title += ` (${this.game.user})`;
+        this.enableDrag(this.game.getCurrentDiscType());
       } else {
         dom.addClass(this.$refs.arrow, 'open');
         document.title += ` (${this.oppPlayer})`;
+        this.disableAllDrag();
       }
 
       if (this.game.hasWinner(currentTurn)) {
@@ -235,6 +239,7 @@ export default {
       disc.draggable = {
         container: 'board-table',
         onDragEnd: this.dragEnd,
+        onDragStart: this.dragStart,
         resetInitialPos: false,
         resetPreviousPos: false,
         stopDragging: true
@@ -251,6 +256,7 @@ export default {
       discs: this.game.discs,
       docks: this.game.docks,
       isMyTurn: this.game.isMyTurn,
+      selectingDisc: null,
       oppPlayer: '(ᵔᴥᵔ)',
       player: '(ᵔᴥᵔ)'
     };
@@ -283,11 +289,32 @@ export default {
     },
 
     ready() {
-      const { user, discs } = this.game;
+      const { user } = this.game;
 
       socket.emit('ready', {
-        user,
-        discs
+        user
+      });
+    },
+
+    disableAllDrag() {
+      this.game.discs.map((disc) => {
+        disc.draggable.stopDragging = true;
+      });
+    },
+
+    disableDrag(discType) {
+      this.game.discs.map((disc) => {
+        if (discType === disc.type) {
+          disc.draggable.stopDragging = true;
+        }
+      });
+    },
+
+    enableDrag(discType) {
+      this.game.discs.map((disc) => {
+        if (discType === disc.type) {
+          disc.draggable.stopDragging = false;
+        }
       });
     },
 
@@ -301,22 +328,28 @@ export default {
       return arr && arr[0];
     },
 
-    getDiscElem(name) {
+    getDiscWrap(name) {
       return document.getElementById(name);
+    },
+
+    getDiscElem(selector) {
+      const discWrap = (selector.nodeType === 1 && dom.hasClass(selector, 'disc-wrap')) ? selector : this.getDiscWrap(selector);
+
+      return discWrap && discWrap.querySelector('.disc');
     },
 
     dock() {
       for (let i = 0; i < START_POINTS.length; i++) {
         const cellElem = this.getDockCell(START_POINTS[i]);
-        const discElem = this.getDiscElem(`disc-${i}`);
-        const discName = discElem.getAttribute('data-name');
+        const discWrap = this.getDiscWrap(`disc-${i}`);
+        const discName = discWrap.getAttribute('data-name');
         const disc = this.game.getDisc(discName);
 
         const cell = cellElem.getAttribute('data-dock');
         const coord = this.game.parseCoord(cell);
 
         this.game.setPosition(disc, coord);
-        this.placeDisc(cellElem, discElem);
+        this.placeDisc(cellElem, discWrap);
       }
     },
 
@@ -336,18 +369,93 @@ export default {
       this.player = this.game.user;
     },
 
-    dragEnd(elem, event) {
-      const discName = event.dragElem.getAttribute('data-name');
+    dockClick(e) {
+      const cellElem = e.currentTarget;
+      const coord = this.game.parseCoord(cellElem.dataset.dock);
+      const dock = this.game.getDock(coord);
+      const disc = this.game.getSelectingDisc();
+
+      if (!disc) return;
+
+      const discWrap = this.getDiscWrap(disc.name);
+
+      if (dock.isNextMove) {
+        this.game.setPosition(disc, coord);
+        this.placeDisc(cellElem, discWrap);
+        this.game.unClickAllDiscs();
+        this.game.clearAllNextMoves();
+
+        const { user } = this.game;
+
+        socket.emit('move', {
+          user,
+          discName: disc.name,
+          cell: cellElem.dataset.dock
+        });
+      }
+    },
+
+    dragStart(e) {
+      var discWrap = e.currentTarget;
+      const discName = discWrap.getAttribute('data-name');
+      const discElem = this.getDiscElem(discName);
       const disc = this.game.getDisc(discName);
 
-      if (elem && elem.closest('.droppable')) {
+      this.isDiscClicked = false;
+
+      this.startClick = new Date().getTime();
+
+      dom.removeClass(discElem, 'bounce-in');
+      setTimeout(() => {
+        dom.addClass(discElem, 'is-holding');
+      }, 0);
+
+      this.selectTimer = setTimeout(() => {
+        this.setSelect(disc);
+      }, 250);
+    },
+
+    setSelectingDisc(disc) {
+      disc.setSelect(true);
+      this.selectingDisc = disc;
+    },
+
+    setSelect(disc) {
+      this.game.setNextMoves(disc.name);
+      this.setSelectingDisc(disc);
+    },
+
+    dragEnd(elem, event) {
+      const dockELem = elem.closest('.dock');
+      const discName = event.dragElem.getAttribute('data-name');
+      const discElem = this.getDiscElem(discName);
+      const disc = this.game.getDisc(discName);
+      const dock = this.game.getDock(dockELem && dockELem.dataset.dock);
+
+      this.endClick = new Date().getTime();
+
+      setTimeout(() => {
+        dom.removeClass(discElem, 'is-holding');
+      }, 0);
+
+      if (elem && elem.closest('.droppable') && dock && !dock.disc) {
         elem = elem.parentNode;
         const cell = elem.getAttribute('data-dock');
 
-        if (disc.cell === cell/* || !this.game.isValidMove(disc.cell, cell)*/) {
+        if (disc.cell === cell || !this.game.isValidMove(disc.cell, cell)) {
+
+          if (this.endClick - this.startClick <= 250) {
+            this.isDiscClicked = true;
+
+            this.setSelect(disc);
+          }
+
           this.resetPreviousPos(disc);
           return;
         }
+
+        this.game.unClickAllDiscs();
+        this.game.clearAllNextMoves();
 
         this.placeDisc(elem, event.dragElem);
 
@@ -359,22 +467,23 @@ export default {
           cell
         });
       } else {
-        this.resetPos(disc);
+        this.resetPreviousPos(disc);
       }
     },
 
-    placeDisc(cellElem, discElem) {
-      if (!cellElem || !discElem) return;
+    placeDisc(cellElem, discWrap) {
+      if (!cellElem || !discWrap) return;
 
       const container = document.getElementById('board-table');
       const containerRect = container.getBoundingClientRect();
       const containerScrollLeft = container.scrollLeft;
+      const discElem = this.getDiscElem(discWrap);
 
       const rect = cellElem.getBoundingClientRect();
       let { left, top } = rect;
 
-      top -= discElem.clientHeight / 2;
-      left -= discElem.clientWidth / 2;
+      top -= (discWrap.clientHeight / 2) - (cellElem.clientHeight / 2);
+      left -= (discWrap.clientWidth / 2) - (cellElem.clientWidth / 2);
 
       const dropELemRect = {
         left,
@@ -388,10 +497,14 @@ export default {
         startDragPosition: dropELemRect,
         currentDragPosition: dropELemRect,
         prevPosition: dropELemRect
-      }, discElem);
+      }, discWrap);
 
-      discElem.style.left = `${Math.floor(dropELemRect.relLeft)}px`;
-      discElem.style.top = `${Math.floor(dropELemRect.relTop)}px`;
+      discWrap.style.left = `${Math.floor(dropELemRect.relLeft)}px`;
+      discWrap.style.top = `${Math.floor(dropELemRect.relTop)}px`;
+
+      setTimeout(() => {
+        dom.addClass(discElem, 'bounce-in');
+      }, 0);
     },
 
     resetPos(disc) {

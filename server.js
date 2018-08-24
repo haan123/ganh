@@ -82,6 +82,8 @@ io.on('connection', function (socket) {
   });
 
   socket.on('ready', function (data) {
+    if (!data.user) return;
+
     console.log(`${data.user} is ready`);
 
     const keys = Object.keys(io.sockets.connected);

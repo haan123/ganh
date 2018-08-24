@@ -260,8 +260,18 @@ export const Draggable = {
     }
 
     function mouseDown(event) {
+      const stopDragging = binding.value && binding.value.stopDragging;
+      if (stopDragging) {
+        return;
+      }
+
       setState({ initialMousePos: getInitialMousePosition(event) }, handler);
       handlePositionChanged(event);
+
+      if (binding.value && binding.value.onDragStart) {
+        binding.value.onDragStart(event);
+      }
+
       document.addEventListener('mousemove', mouseMove);
       document.addEventListener('mouseup', mouseUp);
     }
