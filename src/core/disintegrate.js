@@ -15,7 +15,10 @@ const disParticleTypes = [];
 // Take a "screenshot" of the given Dis object's element using html2canvas
 let numCanvasesLoaded = 0;
 function getScreenshot(disObj) {
-  html2canvas(disObj.elem, { scale: 1 }).then((canvas) => {
+  html2canvas(disObj.elem, {
+    scale: 1,
+    logging: false
+  }).then((canvas) => {
     numCanvasesLoaded++;
     if (typeof disObj.scrnCanvas === 'undefined') {
       disObj.scrnCanvas = canvas;
@@ -662,35 +665,6 @@ function Particle() {
 }
 
 addParticleType(Particle);
-
-/* An "exploding" particle effect that uses circles */
-function ExplodingParticle() {
-  this.name = 'ExplodingParticle';
-  this.animationDuration = 1000; // in ms
-
-  this.speed = {
-    x: -5 + (Math.random() * 10),
-    y: -5 + (Math.random() * 10)
-  };
-  this.radius = 5 + (Math.random() * 5);
-  this.life = 30 + (Math.random() * 10);
-  this.remainingLife = this.life;
-  this.draw = (ctx) => {
-    if (this.remainingLife > 0
-      && this.radius > 0) {
-      ctx.beginPath();
-      ctx.arc(this.startX, this.startY, this.radius, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${this.rgbArray[0]}, ${this.rgbArray[1]}, ${this.rgbArray[2]}, 1)`;
-      ctx.fill();
-      this.remainingLife--;
-      this.radius -= 0.25;
-      this.startX += this.speed.x;
-      this.startY += this.speed.y;
-    }
-  };
-}
-
-addParticleType(ExplodingParticle);
 
 export default {
   init,

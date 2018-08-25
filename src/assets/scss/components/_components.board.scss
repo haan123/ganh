@@ -18,6 +18,8 @@ $border-width: 1px;
   width: 100%;
   margin-top: 60px;
   margin-bottom: 60px;
+  padding-bottom: 26px;
+  overflow: auto;
 }
 
 .square {
@@ -30,13 +32,10 @@ $border-width: 1px;
   transform: rotate(45deg);
 }
 
-// .line__1 {
-//   position: absolute;
-//   top: 58px;
-//   bottom: 0;
-//   border: 1px solid #fff;
-//   transform: rotate(45deg);
-// }
+.board__inner {
+  margin-top: 16px;
+  margin-left: 16px;
+}
 
 .board__table {
   position: relative;
@@ -65,6 +64,7 @@ $border-width: 1px;
 }
 
   .board__frame {
+    width: 400px;
     padding-bottom: 30px;
     overflow: hidden;
   }

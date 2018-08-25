@@ -113,6 +113,7 @@ import UserConfigModal from './UserConfigModal';
 import NewGameModal from './NewGameModal';
 import modal from '../core/modal';
 import dom from '../core/dom';
+import util from '../core/util';
 
 import '../svg/twitter';
 import '../svg/facebook';
@@ -267,7 +268,9 @@ export default {
     this.dock();
     this.ready();
 
-    disintegrate.init();
+    if (!util.isMobile()) {
+      disintegrate.init();
+    }
   },
 
   methods: {
