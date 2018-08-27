@@ -14,8 +14,7 @@
 if (process.env.NODE_ENV === 'production') {
   window.SOCKET_URL = 'https://ganh.herokuapp.com';
 } else {
-  // window.SOCKET_URL = 'http://localhost:3000';
-  window.SOCKET_URL = 'http://192.168.1.10:3000';
+  window.SOCKET_URL = 'http://localhost:3000';
 }
 
 export default {
